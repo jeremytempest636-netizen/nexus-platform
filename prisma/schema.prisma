@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  DEVOPS
+  DEVELOPER
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(DEVELOPER)
+
+  projects    ProjectMember[]
+  deployments Deployment[]
+  incidents   Incident[]
+  auditLogs   AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?
+  repository  String?
+  status      ProjectStatus @default(ACTIVE)
+
+  members     ProjectMember[]
+  deployments Deployment[]
+  incidents   Incident[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model ProjectMember {
+  id String @id @default(cuid())
+
+  userId    String
+  projectId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+model Deployment {
+  id String @id @default(cuid())
+
+  projectId     String
+  triggeredById String?
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  triggeredBy User?   @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  commitHash  String?
+  branch      String?
+  imageName   String?
+  containerId String?
+
+  status DeploymentStatus @default(PENDING)
+  logs   String?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Incident {
+  id String @id @default(cuid())
+
+  projectId   String?
+  createdById String?
+
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+
+  severity IncidentSeverity @default(MEDIUM)
+  status   IncidentStatus   @default(OPEN)
+
+  rootCause  String?
+  aiAnalysis String?
+  resolution String?
+
+  detectedAt DateTime  @default(now())
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([severity])
+  @@index([status])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  userId String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model ContainerMetric {
+  id            String   @id @default(cuid())
+  containerId   String
+  cpuPercent    Float
+  memoryUsage   BigInt   @default(0)
+  memoryLimit   BigInt   @default(0)
+  memoryPercent Float
+  rxBytes       BigInt   @default(0)
+  txBytes       BigInt   @default(0)
+  recordedAt    DateTime @default(now())
+
+  @@index([containerId, recordedAt])
+  @@index([recordedAt])
+}

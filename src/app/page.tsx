@@ -1,69 +1,105 @@
-import Image from "next/image";
+export default function Dashboard() {
+  const stats = [
+    ["Applications", "12"],
+    ["Containers", "24"],
+    ["CPU Usage", "42%"],
+    ["Memory", "61%"],
+  ];
 
-export default function Home() {
+  const services = [
+    ["Frontend", "Running", "99.99%"],
+    ["Backend API", "Running", "99.95%"],
+    ["PostgreSQL", "Running", "99.98%"],
+    ["Redis", "Running", "99.99%"],
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="p-8">
+      <div className="mb-8">
+        <p className="text-sm text-slate-500">NEXUS CONTROL CENTER</p>
+        <h1 className="mt-1 text-3xl font-bold">Overview</h1>
+        <p className="mt-2 text-slate-400">
+          Monitor applications, infrastructure and intelligent operations.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        {stats.map(([name, value]) => (
+          <div
+            key={name}
+            className="rounded-xl border border-slate-800 bg-slate-900 p-5"
+          >
+            <p className="text-sm text-slate-500">{name}</p>
+            <p className="mt-2 text-3xl font-bold">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold">Services</h2>
+
+          <div className="mt-5 space-y-3">
+            {services.map(([name, status, uptime]) => (
+              <div
+                key={name}
+                className="flex items-center justify-between rounded-lg border border-slate-800 p-4"
+              >
+                <div>
+                  <p className="font-medium">{name}</p>
+                  <p className="text-xs text-green-400">{status}</p>
+                </div>
+
+                <span className="text-sm text-slate-400">
+                  {uptime}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold">AI DevOps Copilot</h2>
+
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            NEXUS AI continuously analyzes infrastructure metrics,
+            containers, logs and incidents to identify possible root causes.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+
           <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/ai-copilot"
+            className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium hover:bg-blue-500"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
+            Open AI Copilot
           </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        </section>
+      </div>
+
+      <section className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <h2 className="text-lg font-semibold">Recent Incidents</h2>
+
+        <div className="mt-5 space-y-3">
+          {[
+            ["#1042", "Backend API high latency", "Investigating"],
+            ["#1041", "Container restarted", "Resolved"],
+            ["#1040", "High memory usage", "Resolved"],
+          ].map(([id, title, status]) => (
+            <div
+              key={id}
+              className="flex items-center justify-between border-b border-slate-800 pb-3"
+            >
+              <div>
+                <span className="mr-3 text-xs text-slate-500">{id}</span>
+                <span>{title}</span>
+              </div>
+
+              <span className="text-sm text-yellow-400">
+                {status}
+              </span>
+            </div>
+          ))}
         </div>
-      </main>
+      </section>
     </div>
   );
 }

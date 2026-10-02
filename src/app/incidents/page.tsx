@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -96,7 +96,33 @@ export default function IncidentsPage() {
   }
 
   useEffect(() => {
-    loadIncidents();
+    let cancelled = false;
+
+    async function fetchIncidents() {
+      try {
+        const response = await fetch("/api/incidents", {
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (!cancelled && data.success) {
+          setIncidents(data.incidents);
+        }
+      } catch (error) {
+        console.error("Failed to load incidents", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchIncidents();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function createIncident() {

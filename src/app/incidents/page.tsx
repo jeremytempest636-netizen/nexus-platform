@@ -531,8 +531,12 @@ export default function IncidentsPage() {
                       <p>
                         AI analysis has not been generated yet.
                       </p>
-                      <button className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">
-                        Analyze with AI
+                      <button
+                        onClick={() => analyzeIncident(selected.id)}
+                        disabled={analyzing}
+                        className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {analyzing ? "Analyzing..." : "Analyze with AI"}
                       </button>
                     </div>
                   )}

@@ -65,6 +65,7 @@ function formatDate(value: string) {
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
   const [selected, setSelected] = useState<Incident | null>(null);
 
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -95,6 +96,43 @@ export default function IncidentsPage() {
     }
   }
 
+  async function analyzeIncident(incidentId: string) {
+    try {
+      setAnalyzing(true);
+
+      const response = await fetch(`/api/incidents/${incidentId}/analyze`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "AI analysis failed");
+      }
+
+      if (data.incident) {
+        setIncidents((current) =>
+          current.map((item) =>
+            item.id === data.incident.id ? data.incident : item
+          )
+        );
+
+        setSelectedIncident(data.incident);
+      }
+
+      alert("AI Root Cause Analysis selesai.");
+    } catch (error) {
+      console.error("AI incident analysis failed:", error);
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "AI incident analysis failed"
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  }
   useEffect(() => {
     let cancelled = false;
 

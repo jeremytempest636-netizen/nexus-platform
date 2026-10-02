@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import Docker from "dockerode";
+import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth/rbac";
 
 const docker = new Docker({
@@ -9,63 +9,6 @@ const docker = new Docker({
       ? "//./pipe/docker_engine"
       : "/var/run/docker.sock",
 });
-
-function buildPrompt(input: {
-  incident: {
-    title: string;
-    description: string | null;
-    severity: string;
-    status: string;
-  };
-  container: unknown;
-  metrics: unknown[];
-  logs: string;
-  deployment: unknown;
-}) {
-  return `
-You are NEXUS AI DevOps Copilot.
-
-Analyze this infrastructure incident using only the available evidence.
-
-INCIDENT
-Title: ${input.incident.title}
-Description: ${input.incident.description ?? "No description"}
-Severity: ${input.incident.severity}
-Status: ${input.incident.status}
-
-CONTAINER STATE
-${JSON.stringify(input.container, null, 2)}
-
-RECENT CONTAINER METRICS
-${JSON.stringify(input.metrics, null, 2)}
-
-CONTAINER LOGS
-${input.logs || "No logs available"}
-
-LATEST DEPLOYMENT
-${JSON.stringify(input.deployment, null, 2)}
-
-Return a concise operational analysis with these sections:
-
-ROOT CAUSE:
-Most likely technical root cause.
-
-EVIDENCE:
-Specific evidence supporting the conclusion.
-
-IMPACT:
-Likely impact on the application or infrastructure.
-
-RECOMMENDED ACTIONS:
-Concrete actions a DevOps engineer should take.
-
-CONFIDENCE:
-LOW, MEDIUM, or HIGH.
-
-Do not invent evidence that is not present.
-If evidence is insufficient, explicitly state what information is missing.
-`;
-}
 
 export async function POST(
   _request: Request,
@@ -107,10 +50,6 @@ export async function POST(
       }
     }
 
-    let container: unknown = null;
-    let metrics: unknown[] = [];
-    let logs = "";
-
     const latestDeployment = incident.projectId
       ? await prisma.deployment.findFirst({
           where: {
@@ -122,110 +61,41 @@ export async function POST(
         })
       : null;
 
-    const deployment = latestDeployment
-      ? {
-          id: latestDeployment.id,
-          status: latestDeployment.status,
-          branch: latestDeployment.branch,
-          imageName: latestDeployment.imageName,
-          containerId: latestDeployment.containerId,
-          startedAt: latestDeployment.startedAt,
-          finishedAt: latestDeployment.finishedAt,
-        }
-      : null;
+    let containerStats: unknown = null;
+    let containerLogs = "";
 
     if (latestDeployment?.containerId) {
       try {
-        const dockerContainer = docker.getContainer(
-          latestDeployment.containerId
-        );
+        const container = docker.getContainer(latestDeployment.containerId);
 
-        const inspect = await dockerContainer.inspect();
+        const stats = await container.stats({
+          stream: false,
+        });
 
-        container = {
-          id: inspect.Id,
-          name: inspect.Name?.replace(/^\//, ""),
-          state: inspect.State,
-          image: inspect.Config?.Image,
-          restartCount: inspect.RestartCount,
-          ports: inspect.NetworkSettings?.Ports,
+        containerStats = {
+          cpuPercent: calculateCpuPercent(stats),
+          memoryUsage: stats.memory_stats?.usage ?? 0,
+          memoryLimit: stats.memory_stats?.limit ?? 0,
+          memoryPercent: calculateMemoryPercent(stats),
+          networkRxBytes: getNetworkBytes(stats, "rx_bytes"),
+          networkTxBytes: getNetworkBytes(stats, "tx_bytes"),
         };
 
-        try {
-          const stats = await dockerContainer.stats({
-            stream: false,
-          });
+        const logs = await container.logs({
+          stdout: true,
+          stderr: true,
+          tail: 100,
+          timestamps: true,
+        });
 
-          const cpuDelta =
-            Number(stats.cpu_stats?.cpu_usage?.total_usage ?? 0) -
-            Number(stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
-
-          const systemDelta =
-            Number(stats.cpu_stats?.system_cpu_usage ?? 0) -
-            Number(stats.precpu_stats?.system_cpu_usage ?? 0);
-
-          const onlineCpus =
-            Number(stats.cpu_stats?.online_cpus ?? 1);
-
-          const cpuPercent =
-            systemDelta > 0
-              ? (cpuDelta / systemDelta) * onlineCpus * 100
-              : 0;
-
-          const memoryUsage = Number(
-            stats.memory_stats?.usage ?? 0
-          );
-
-          const memoryLimit = Number(
-            stats.memory_stats?.limit ?? 0
-          );
-
-          const memoryPercent =
-            memoryLimit > 0
-              ? (memoryUsage / memoryLimit) * 100
-              : 0;
-
-          metrics.push({
-            cpuPercent: Number(cpuPercent.toFixed(2)),
-            memoryUsage,
-            memoryLimit,
-            memoryPercent: Number(memoryPercent.toFixed(2)),
-          });
-        } catch {
-          metrics = [];
-        }
-
-        try {
-          const logBuffer = await dockerContainer.logs({
-            stdout: true,
-            stderr: true,
-            tail: 100,
-          });
-
-          logs = logBuffer.toString("utf8").slice(-12000);
-        } catch {
-          logs = "";
-        }
-      } catch {
-        container = {
-          status: "CONTAINER_NOT_FOUND",
-          containerId: latestDeployment.containerId,
-        };
+        containerLogs = Buffer.from(logs).toString("utf8");
+      } catch (error) {
+        containerLogs =
+          error instanceof Error
+            ? `Docker inspection failed: ${error.message}`
+            : "Docker inspection failed";
       }
     }
-
-    const prompt = buildPrompt({
-      incident: {
-        title: incident.title,
-        description: incident.description,
-        severity: incident.severity,
-        status: incident.status,
-      },
-      container,
-      metrics,
-      logs,
-      deployment,
-    });
 
     const apiKey = process.env.OPENROUTER_API_KEY;
 
@@ -233,17 +103,62 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "OPENROUTER_API_KEY is not configured. Add it to .env before using AI analysis.",
+            "OPENROUTER_API_KEY is not configured. Add it to the local .env file.",
         },
-        { status: 503 }
+        { status: 500 }
       );
     }
 
     const model =
-      process.env.OPENROUTER_MODEL ??
-      "anthropic/claude-sonnet-4";
+      process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4";
 
-    const aiResponse = await fetch(
+    const prompt = `
+You are NEXUS AI, an expert DevOps incident response assistant.
+
+Analyze the following production incident using the available evidence.
+
+INCIDENT
+Title: ${incident.title}
+Description: ${incident.description ?? "No description provided"}
+Severity: ${incident.severity}
+Status: ${incident.status}
+
+PROJECT
+Name: ${incident.project?.name ?? "Unknown"}
+
+LATEST DEPLOYMENT
+Status: ${latestDeployment?.status ?? "No deployment found"}
+Branch: ${latestDeployment?.branch ?? "Unknown"}
+Image: ${latestDeployment?.imageName ?? "Unknown"}
+Container ID: ${latestDeployment?.containerId ?? "No container"}
+
+CONTAINER METRICS
+${JSON.stringify(containerStats, null, 2)}
+
+RECENT CONTAINER LOGS
+${containerLogs || "No container logs available"}
+
+Return the analysis using exactly these sections:
+
+ROOT CAUSE
+Explain the most likely technical root cause.
+
+EVIDENCE
+List concrete evidence from the incident, deployment, metrics, or logs.
+
+IMPACT
+Explain the likely impact on the application or infrastructure.
+
+RECOMMENDED ACTIONS
+Provide practical actions to investigate, mitigate, and prevent recurrence.
+
+CONFIDENCE
+Give a confidence level as LOW, MEDIUM, or HIGH and briefly explain why.
+
+Do not invent evidence that is not present in the supplied data.
+`;
+
+    const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
@@ -255,56 +170,56 @@ export async function POST(
         },
         body: JSON.stringify({
           model,
-          temperature: 0.1,
           messages: [
             {
               role: "system",
               content:
-                "You are a senior DevOps and Site Reliability Engineering assistant. Analyze evidence conservatively and never invent infrastructure facts.",
+                "You are a senior DevOps and Site Reliability Engineering assistant.",
             },
             {
               role: "user",
               content: prompt,
             },
           ],
+          temperature: 0.2,
         }),
       }
     );
 
-    const aiData = await aiResponse.json();
-
-    if (!aiResponse.ok) {
-      console.error("[NEXUS AI ERROR]", aiData);
+    if (!response.ok) {
+      const errorText = await response.text();
 
       return NextResponse.json(
         {
-          error:
-            aiData?.error?.message ??
-            "AI provider request failed",
+          error: "OpenRouter request failed",
+          details: errorText,
         },
         { status: 502 }
       );
     }
 
-    const analysis =
-      aiData?.choices?.[0]?.message?.content;
+    const result = await response.json();
 
-    if (!analysis) {
-      return NextResponse.json(
-        { error: "AI returned an empty analysis" },
-        { status: 502 }
-      );
-    }
+    const analysis =
+      result?.choices?.[0]?.message?.content?.trim() ||
+      "AI returned an empty analysis.";
+
+    const rootCauseMatch = analysis.match(
+      /ROOT CAUSE\s*([\s\S]*?)(?=\nEVIDENCE|$)/i
+    );
+
+    const rootCause =
+      rootCauseMatch?.[1]?.trim() || analysis.slice(0, 1000);
 
     const updatedIncident = await prisma.incident.update({
       where: { id },
       data: {
         aiAnalysis: analysis,
-        rootCause: analysis,
-        status:
-          incident.status === "OPEN"
-            ? "INVESTIGATING"
-            : incident.status,
+        rootCause,
+        status: incident.status === "OPEN" ? "INVESTIGATING" : incident.status,
+      },
+      include: {
+        project: true,
       },
     });
 
@@ -316,16 +231,17 @@ export async function POST(
         entityId: incident.id,
         metadata: JSON.stringify({
           model,
-          severity: incident.severity,
-          projectId: incident.projectId,
+          deploymentId: latestDeployment?.id ?? null,
+          containerId: latestDeployment?.containerId ?? null,
         }),
       },
     });
 
     return NextResponse.json({
       success: true,
-      analysis,
       incident: updatedIncident,
+      analysis,
+      model,
     });
   } catch (error) {
     const message =
@@ -333,14 +249,54 @@ export async function POST(
         ? error.message
         : "Failed to analyze incident";
 
-    console.error("[NEXUS INCIDENT AI ERROR]", error);
+    console.error("[NEXUS AI INCIDENT ANALYSIS ERROR]", error);
 
     return NextResponse.json(
       {
-        success: false,
         error: message,
       },
       { status: 500 }
     );
   }
+}
+
+function calculateCpuPercent(stats: Docker.ContainerStats): number {
+  const cpuDelta =
+    (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) -
+    (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
+
+  const systemDelta =
+    (stats.cpu_stats?.system_cpu_usage ?? 0) -
+    (stats.precpu_stats?.system_cpu_usage ?? 0);
+
+  const cpuCount = stats.cpu_stats?.online_cpus ?? 1;
+
+  if (systemDelta <= 0 || cpuDelta <= 0) {
+    return 0;
+  }
+
+  return Number(((cpuDelta / systemDelta) * cpuCount * 100).toFixed(2));
+}
+
+function calculateMemoryPercent(stats: Docker.ContainerStats): number {
+  const usage = stats.memory_stats?.usage ?? 0;
+  const limit = stats.memory_stats?.limit ?? 0;
+
+  if (!limit) {
+    return 0;
+  }
+
+  return Number(((usage / limit) * 100).toFixed(2));
+}
+
+function getNetworkBytes(
+  stats: Docker.ContainerStats,
+  field: "rx_bytes" | "tx_bytes"
+): number {
+  const networks = stats.networks ?? {};
+
+  return Object.values(networks).reduce(
+    (total, network) => total + Number(network[field] ?? 0),
+    0
+  );
 }

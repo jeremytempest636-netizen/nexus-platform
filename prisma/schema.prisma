@@ -55,8 +55,9 @@ model User {
   incidents   Incident[]
   auditLogs   AuditLog[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  aiCopilotSessions AiCopilotSession[]
 
   @@index([email])
 }
@@ -73,8 +74,9 @@ model Project {
   deployments Deployment[]
   incidents   Incident[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  aiCopilotSessions AiCopilotSession[]
 
   @@index([slug])
 }
@@ -183,4 +185,22 @@ model ContainerMetric {
 
   @@index([containerId, recordedAt])
   @@index([recordedAt])
+}
+
+model AiCopilotSession {
+  id                 String   @id @default(cuid())
+  userId             String
+  projectId          String
+  message            String
+  answer             String
+  model              String
+  telemetryAvailable Boolean  @default(false)
+  containerId        String?
+  createdAt          DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
 }

@@ -8,6 +8,7 @@ const navigation = [
   { name: "Applications", href: "/applications" },
   { name: "Deployments", href: "/deployments" },
   { name: "Infrastructure", href: "/infrastructure" },
+  { name: "Kubernetes", href: "/kubernetes" },
   { name: "Containers", href: "/containers" },
   { name: "Incidents", href: "/incidents" },
   { name: "AI Copilot", href: "/ai-copilot" },

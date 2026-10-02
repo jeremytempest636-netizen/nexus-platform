@@ -170,6 +170,7 @@ Do not invent evidence that is not present in the supplied data.
         },
         body: JSON.stringify({
           model,
+          max_tokens: 2000,
           messages: [
             {
               role: "system",

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@kubernetes/client-node": "^2.0.0",
     "@prisma/client": "^6.19.3",
     "@types/dockerode": "^4.0.1",
     "bcryptjs": "^3.0.3",

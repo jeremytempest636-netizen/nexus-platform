@@ -117,7 +117,7 @@ export default function IncidentsPage() {
           )
         );
 
-        setSelectedIncident(data.incident);
+      setSelected(data.incident);
       }
 
       alert("AI Root Cause Analysis selesai.");

@@ -1,4 +1,4 @@
-﻿import { redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -56,6 +56,7 @@ export default async function AppPage() {
               ["Applications", "/applications"],
               ["Deployments", "/deployments"],
               ["Infrastructure", "/infrastructure"],
+              ["Kubernetes", "/kubernetes"],
               ["Containers", "/containers"],
               ["Incidents", "/incidents"],
               ["AI Copilot", "/ai-copilot"],

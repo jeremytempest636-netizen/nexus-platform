@@ -1,4 +1,4 @@
-name: NEXUS CI
+﻿name: NEXUS CI
 
 on:
   push:
@@ -34,3 +34,5 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
